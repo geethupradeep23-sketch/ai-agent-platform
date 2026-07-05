@@ -1,7 +1,7 @@
 {
   "name": "secure-ai-agent-backend",
   "version": "1.0.0",
-  "description": "Enterprise-grade AI Agent Platform Backend",
+  "description": "Enterprise-grade AI Agent Platform Backend with WhatsApp & Email Integration",
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
@@ -18,7 +18,10 @@
     "agent",
     "security",
     "encryption",
-    "multi-agent"
+    "multi-agent",
+    "whatsapp",
+    "email",
+    "messaging"
   ],
   "author": "SecureAI Team",
   "license": "MIT",
@@ -58,7 +61,18 @@
     "graphql": "^16.8.1",
     "apollo-server-express": "^3.13.0",
     "ws": "^8.15.0",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "nodemailer": "^6.9.7",
+    "imap": "^0.8.19",
+    "mailparser": "^3.6.5",
+    "simpleParser": "^4.5.0",
+    "connection-string": "^4.3.2",
+    "google-auth-library": "^9.2.0",
+    "googleapis": "^128.0.0",
+    "microsoft-graph-client": "^3.0.7",
+    "@microsoft/microsoft-graph-types": "^2.37.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
