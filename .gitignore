@@ -1,0 +1,67 @@
+# Git
+.git/
+.gitignore
+.github/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnp
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.test.local
+
+# Build outputs
+build/
+dist/
+.next/
+out/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Security
+*.pem
+*.key
+*.crt
+security/certs/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Testing
+.coverage/
+.nyc_output/
+
+# Docker
+.dockerignore
+.docker/
+
+# Temporary
+tmp/
+temp/
