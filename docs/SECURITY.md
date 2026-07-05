@@ -1,171 +1,235 @@
-# 🛡️ Security Architecture & Implementation
+# 🔐 Security Guide
 
-## Encryption Strategy
+## Security Architecture
 
-### Data at Rest (AES-256-GCM)
-All data is encrypted with AES-256-GCM before storage in database.
+### Encryption Strategy
 
-### Data in Transit (TLS 1.3)
-All network communication uses TLS 1.3 encryption.
+```
+User Input
+    ↓
+Validation & Sanitization
+    ↓
+AES-256-GCM Encryption
+    ↓
+HMAC Authentication Tag
+    ↓
+Database Storage
+    ↓
+Encrypted Retrieval
+    ↓
+Decryption & Display
+```
 
 ### Key Management
-```
-Master Encryption Key (MEK) - stored in Vault/HSM
-    ↓
-├─ Data Encryption Key (DEK) - AES-256
-├─ Key Encryption Key (KEK) - RSA-4096
-└─ SSH Keys - Ed25519
-```
 
-### Password Security
-- Bcrypt hashing with 12+ salt rounds
-- No plaintext passwords stored
-- Secure password reset tokens
+1. **Master Encryption Key**: Used for AES-256-GCM
+   - Stored in environment variables
+   - Never committed to version control
+   - Rotated annually
+
+2. **JWT Secrets**: Used for token generation
+   - Refresh tokens expire in 7 days
+   - Access tokens expire in 15 minutes
+   - Signed with RS256 in production
+
+3. **API Keys**: User-generated API keys
+   - Hashed with bcrypt before storage
+   - Rate limited per key
+   - Can be revoked instantly
 
 ## Authentication & Authorization
 
-### Multi-Factor Authentication
-- TOTP (Time-based One-Time Passwords)
-- Biometric (Face/Fingerprint)
-- Hardware keys (FIDO2/U2F)
+### Multi-Factor Authentication (MFA)
 
-### JWT Token System
-- Access Token: 15 minutes expiry
-- Refresh Token: 7 days expiry
-- Automatic token rotation
-- Device fingerprint validation
+```bash
+# Enable 2FA
+POST /api/v1/auth/mfa/setup
+
+# Verify 2FA
+POST /api/v1/auth/mfa/verify
+```
 
 ### Role-Based Access Control (RBAC)
-- ADMIN: Full access
-- AGENT_MANAGER: Create and manage agents
-- AGENT_USER: Use own agents
-- VIEWER: Read-only access
+
+- **Admin**: Full platform access
+- **User**: Personal data and agents only
+- **API Key**: Limited scope access
+
+### Row-Level Security (RLS)
+
+PostgreSQL RLS policies ensure users can only access their own data:
+
+```sql
+CREATE POLICY user_isolation ON agents
+  USING (user_id = current_user_id())
+  WITH CHECK (user_id = current_user_id());
+```
 
 ## Data Protection
 
-### Zero-Knowledge Architecture
-**What we DON'T store:**
-- Plaintext passwords
-- Master encryption keys
-- API keys in plain text
-- Unencrypted conversation data
+### In Transit
 
-### End-to-End Encryption
-- Client-side encryption before transmission
-- Server-side encryption at rest
-- Only user has decryption keys
+- ✅ TLS 1.3 required in production
+- ✅ HSTS headers enabled
+- ✅ Certificate pinning recommended
+- ✅ CORS properly configured
 
-### Row-Level Security (RLS)
-- PostgreSQL RLS policies
-- User data isolation
-- Agent access controls
+### At Rest
 
-## Network Security
+- ✅ AES-256-GCM encryption
+- ✅ Encrypted database backups
+- ✅ Encrypted file storage
+- ✅ Secure key derivation
 
-### Certificate Pinning
-- Pin server certificates
-- Prevent MITM attacks
-- Automatic certificate rotation
+### In Memory
 
-### DDoS Protection
-- Rate limiting (100 req/15min)
-- Progressive delays on failed attempts
-- IP-based blocking
-- WAF integration ready
+- ✅ Sensitive data cleared after use
+- ✅ No sensitive data in logs
+- ✅ Secure random number generation
+- ✅ Memory-safe string handling
 
-### CORS Configuration
-- Strict origin validation
-- Only allowed domains
-- No wildcard origins
-
-## Threat Prevention
-
-### SQL Injection
-- ✅ Parameterized queries
-- ✅ ORM layer protection
-- ✅ Input validation
-
-### XSS Attacks
-- ✅ Output encoding
-- ✅ Content Security Policy
-- ✅ DOM purification
-
-### CSRF Protection
-- ✅ CSRF tokens
-- ✅ SameSite cookies
-- ✅ Origin validation
-
-### Brute Force
-- ✅ Account lockout (5 attempts)
-- ✅ Progressive delays
-- ✅ IP-based rate limiting
-
-### Malware
-- ✅ Sandboxed code execution
-- ✅ Code signing verification
-- ✅ Antivirus scanning
-
-## Compliance
-
-### GDPR
-- ✅ Right to access (data export)
-- ✅ Right to deletion (secure erasure)
-- ✅ Data portability
-- ✅ Privacy by design
-
-### CCPA
-- ✅ Data disclosure
-- ✅ Opt-out options
-- ✅ Data deletion
-
-### HIPAA (Health Data)
-- ✅ Encryption at rest & in transit
-- ✅ Access controls
-- ✅ Audit logging
-
-## Audit & Monitoring
+## Audit & Compliance
 
 ### Audit Logging
-- All user actions logged
-- Login attempts tracked
-- Data modifications recorded
-- IP addresses stored
-- 90-day retention
 
-### Security Monitoring
-- Real-time threat detection
-- Anomaly detection
-- Automated alerting
-- Incident response procedures
+All actions are logged to `audit_logs` table:
 
-## Backup & Recovery
+```sql
+SELECT action, resource_type, resource_id, details, created_at
+FROM audit_logs
+WHERE user_id = 'user-123'
+ORDER BY created_at DESC;
+```
 
-### Encrypted Backups
-- Daily automated backups
-- AES-256 encryption
-- Separate key storage
-- 30-day retention
-- Off-site replication
+### Compliance
 
-### Disaster Recovery
-- RTO: 1 hour
-- RPO: 15 minutes
-- Regular recovery tests
-- Documented procedures
+- ✅ GDPR compliant (right to deletion)
+- ✅ HIPAA ready (encryption at rest)
+- ✅ SOC 2 aligned
+- ✅ ISO 27001 standards
+
+## Vulnerability Management
+
+### Dependencies
+
+```bash
+# Check for vulnerabilities
+npm audit
+npm audit fix
+
+# Using Snyk
+snyk test
+snyk protect
+```
+
+### Security Headers
+
+All responses include security headers:
+
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Security-Policy: default-src 'self'
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+## Best Practices
+
+### For Administrators
+
+1. **Key Rotation**
+   ```bash
+   # Rotate encryption keys annually
+   ./scripts/rotate-keys.sh
+   ```
+
+2. **Regular Backups**
+   ```bash
+   # Automated daily backups
+   0 2 * * * /scripts/backup.sh
+   ```
+
+3. **Monitoring**
+   - Monitor failed login attempts
+   - Track API key usage
+   - Review audit logs weekly
+
+4. **Updates**
+   ```bash
+   # Keep dependencies updated
+   npm update
+   docker pull postgres:latest
+   ```
+
+### For Users
+
+1. **Use Strong Passwords**
+   - Minimum 12 characters
+   - Mix of uppercase, lowercase, numbers, symbols
+
+2. **Enable 2FA**
+   - Use TOTP authenticator app
+   - Save backup codes safely
+
+3. **API Key Security**
+   - Use environment variables
+   - Rotate API keys regularly
+   - Delete unused keys
+
+4. **Account Security**
+   - Never share passwords
+   - Logout from untrusted devices
+   - Monitor active sessions
 
 ## Incident Response
 
-### Security Incident Procedure
-1. **Detect** - Monitor logs for suspicious activity
-2. **Respond** - Isolate affected systems
-3. **Investigate** - Determine scope and impact
-4. **Remediate** - Fix vulnerabilities
-5. **Notify** - Inform affected users (if required)
-6. **Review** - Post-incident analysis
+### If Breach is Suspected
 
-### Vulnerability Disclosure
-Security issues should be reported to: **security@yourdomain.com**
+1. **Immediately**
+   - Revoke all API keys
+   - Force logout all sessions
+   - Backup all data
 
----
+2. **Within 24 Hours**
+   - Review audit logs
+   - Identify affected data
+   - Notify users if needed
 
-**Security is a continuous process. Review regularly and update as needed.**
+3. **Follow-up**
+   - Rotate all encryption keys
+   - Enable enhanced monitoring
+   - Document incident details
+
+## Security Checklist
+
+### Pre-Deployment
+
+- [ ] All environment variables are secrets
+- [ ] No hardcoded credentials
+- [ ] HTTPS configured
+- [ ] Firewall rules set
+- [ ] Database backups enabled
+- [ ] SSL certificates valid
+- [ ] Rate limiting enabled
+- [ ] CORS properly configured
+- [ ] Security headers enabled
+- [ ] Audit logging enabled
+
+### Post-Deployment
+
+- [ ] Monitor failed logins
+- [ ] Check audit logs daily
+- [ ] Verify backups work
+- [ ] Test incident response
+- [ ] Review access logs
+- [ ] Update dependencies
+- [ ] Rotate encryption keys
+- [ ] Test disaster recovery
+
+## Resources
+
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [Node.js Security Best Practices](https://nodejs.org/en/docs/guides/security/)
+- [PostgreSQL Security](https://www.postgresql.org/docs/current/sql-syntax.html)
+- [Cryptography Standards](https://csrc.nist.gov/)

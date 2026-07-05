@@ -1,179 +1,249 @@
 # 🚀 Deployment Guide
 
-## Prerequisites
-- Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL 14+
-- Redis 7+
-- Git
+## Production Deployment Checklist
 
-## Self-Hosted Deployment (Docker Compose)
+- [ ] SSL/TLS certificates obtained
+- [ ] Domain configured
+- [ ] Environment variables set
+- [ ] Database backups configured
+- [ ] Monitoring setup
+- [ ] Load balancer configured
+- [ ] Security headers enabled
+- [ ] Rate limiting configured
+- [ ] Firewall rules set
+- [ ] Backup strategy documented
 
-### Step 1: Clone Repository
+## Docker Compose Production
+
+### 1. Update Environment
+
 ```bash
-git clone https://github.com/geethupradeep23-sketch/ai-agent-platform.git
-cd ai-agent-platform
+NODE_ENV=production
+DOMAIN=yourdomain.com
+SSL_CERT_PATH=/etc/letsencrypt/live/yourdomain.com
 ```
 
-### Step 2: Generate Encryption Keys
+### 2. Deploy
+
 ```bash
-node scripts/generate-keys.js
+docker-compose -f docker-compose.prod.yml up -d
+
+# Verify all services are running
+docker-compose ps
 ```
 
-### Step 3: Configure Environment
+### 3. Configure SSL
+
 ```bash
-cp .env.example .env
-# Edit .env with your settings
-nano .env
+# Using Let's Encrypt with Certbot
+sudo certbot certonly --standalone -d yourdomain.com
+
+# Update docker-compose to use certificates
+volumes:
+  - /etc/letsencrypt:/etc/letsencrypt
 ```
 
-### Step 4: Start Services
+## Cloud Deployment
+
+### AWS ECS
+
 ```bash
-docker-compose up -d
+# Create ECR repository
+aws ecr create-repository --repository-name secure-ai-agent
+
+# Build and push image
+docker build -t secure-ai-agent .
+docker tag secure-ai-agent:latest <AWS_ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/secure-ai-agent:latest
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <AWS_ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com
+docker push <AWS_ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/secure-ai-agent:latest
 ```
 
-### Step 5: Initialize Database
+### Heroku
+
 ```bash
-docker-compose exec backend npm run db:migrate
+heroku login
+heroku create your-app-name
+heroku addons:create heroku-postgresql
+heroku config:set NODE_ENV=production
+git push heroku main
 ```
 
-### Step 6: Access Platform
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:3001
-- Vault: http://localhost:8200
-- Ollama: http://localhost:11434
+### DigitalOcean
 
-## Production Deployment
-
-### AWS EC2 + RDS Setup
-
-1. **Create VPC and Security Groups**
-   - Allow inbound: 22 (SSH), 80 (HTTP), 443 (HTTPS)
-   - Allow outbound: All
-
-2. **Launch EC2 Instance**
-   - Ubuntu 22.04 LTS
-   - t3.medium or larger
-   - Configure security group
-
-3. **Create RDS Instance**
-   - PostgreSQL 14+
-   - Multi-AZ for high availability
-   - Enable encryption at rest
-   - Create automated backups
-
-4. **SSH and Deploy**
 ```bash
-ssh -i your-key.pem ubuntu@your-ec2-ip
-
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Clone and configure
-git clone https://github.com/geethupradeep23-sketch/ai-agent-platform.git
-cd ai-agent-platform
-
-# Update .env with RDS endpoint
-DATABASE_URL=postgresql://user:pass@your-rds-endpoint:5432/secure_ai_db
-
-# Deploy
-sudo docker-compose -f docker-compose.prod.yml up -d
+doctl auth init
+doctl apps create --spec app.yaml
 ```
 
-## SSL/TLS Configuration
+## Kubernetes Deployment
 
-### Let's Encrypt (Production)
+### 1. Create Namespace
+
 ```bash
-sudo apt-get install certbot
-sudo certbot certonly --standalone -d your-domain.com
-
-# Copy certificates
-sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ./security/certs/
-sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem ./security/certs/
+kubectl create namespace secure-ai
 ```
 
-## Firewall Configuration
+### 2. Create Secrets
 
 ```bash
-# Enable UFW
-sudo ufw enable
+kubectl create secret generic app-secrets \
+  --from-literal=DB_PASSWORD=<password> \
+  --from-literal=JWT_SECRET=<secret> \
+  -n secure-ai
+```
 
-# Allow ports
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow 3000/tcp  # Frontend dev
-sudo ufw allow 3001/tcp  # Backend dev
+### 3. Deploy
+
+```bash
+kubectl apply -f k8s/postgres.yaml -n secure-ai
+kubectl apply -f k8s/redis.yaml -n secure-ai
+kubectl apply -f k8s/backend.yaml -n secure-ai
+kubectl apply -f k8s/frontend.yaml -n secure-ai
+
+# Check status
+kubectl get pods -n secure-ai
 ```
 
 ## Monitoring & Logging
 
-### View Logs
-```bash
-# All services
-docker-compose logs -f
+### ELK Stack (Elasticsearch, Logstash, Kibana)
 
-# Specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
+```yaml
+# Add to docker-compose.prod.yml
+elasticsearch:
+  image: docker.elastic.co/elasticsearch/elasticsearch:8.0.0
+  environment:
+    - discovery.type=single-node
+  ports:
+    - "9200:9200"
+
+kibana:
+  image: docker.elastic.co/kibana/kibana:8.0.0
+  ports:
+    - "5601:5601"
+  depends_on:
+    - elasticsearch
 ```
 
-### Setup Monitoring
-```bash
-# Install Prometheus
-docker run -d -p 9090:9090 prom/prometheus
+### Prometheus & Grafana
 
-# Install Grafana
-docker run -d -p 3003:3000 grafana/grafana
+```bash
+# Add metrics collection
+npm install prometheus-client
+
+# View metrics at http://localhost:9090
 ```
 
-## Backup & Recovery
+## Backup & Disaster Recovery
 
-### Automated Backups
+### Database Backups
+
 ```bash
-# Add to crontab
-0 2 * * * /path/to/backup.sh
-```
-
-### Backup Script
-```bash
-#!/bin/bash
-# backup.sh
-
-BACKUP_DIR="/backups"
-BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
-
-# Backup database
-pg_dump -U $DB_USER $DB_NAME | gzip > $BACKUP_DIR/db_$BACKUP_DATE.sql.gz
-
-# Encrypt backup
-openssl enc -aes-256-cbc -in $BACKUP_DIR/db_$BACKUP_DATE.sql.gz -out $BACKUP_DIR/db_$BACKUP_DATE.sql.gz.enc
+# Automated daily backups
+0 2 * * * pg_dump $DATABASE_URL > /backups/db-$(date +%Y%m%d).sql
 
 # Upload to S3
-aws s3 cp $BACKUP_DIR/db_$BACKUP_DATE.sql.gz.enc s3://your-backup-bucket/
-
-# Cleanup
-rm $BACKUP_DIR/db_$BACKUP_DATE.sql.gz
+aws s3 sync /backups s3://my-backups/db/
 ```
 
-### Recovery Procedure
+### Restore from Backup
+
 ```bash
-# Download and decrypt backup
-aws s3 cp s3://your-backup-bucket/db_BACKUP.sql.gz.enc .
-openssl enc -d -aes-256-cbc -in db_BACKUP.sql.gz.enc | gunzip > db_backup.sql
-
-# Restore database
-psql -U $DB_USER $DB_NAME < db_backup.sql
+psql $DATABASE_URL < /backups/db-20240115.sql
 ```
 
----
+## Performance Optimization
 
-**Deployment checklist:**
-- [ ] Encryption keys generated
-- [ ] Environment variables configured
-- [ ] SSL/TLS certificates installed
-- [ ] Database backups enabled
-- [ ] Monitoring setup
-- [ ] Firewall configured
-- [ ] Regular backup testing completed
+### Database
+
+```sql
+-- Create indexes
+CREATE INDEX idx_agents_user_created ON agents(user_id, created_at);
+CREATE INDEX idx_messages_session_created ON messages(session_id, created_at);
+
+-- Enable query optimization
+ALTER SYSTEM SET shared_buffers = '4GB';
+ALTER SYSTEM SET effective_cache_size = '12GB';
+```
+
+### Caching
+
+```javascript
+// Set Redis TTL for frequently accessed data
+const CACHE_TTL = 3600; // 1 hour
+await redis.setex(`agent:${agentId}`, CACHE_TTL, JSON.stringify(agent));
+```
+
+### Load Balancing
+
+```nginx
+upstream backend {
+  server backend1:3001;
+  server backend2:3001;
+  server backend3:3001;
+}
+
+server {
+  listen 80;
+  server_name yourdomain.com;
+  
+  location /api {
+    proxy_pass http://backend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+}
+```
+
+## Scaling
+
+### Horizontal Scaling
+
+```bash
+# Scale backend service
+docker-compose up -d --scale backend=3
+
+# Or with Kubernetes
+kubectl scale deployment backend --replicas=5 -n secure-ai
+```
+
+### Vertical Scaling
+
+```bash
+# Increase resource limits in docker-compose
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+```
+
+## Maintenance
+
+### Database Maintenance
+
+```sql
+-- Weekly maintenance
+VACUUM ANALYZE;
+REINDEX DATABASE secure_ai_db;
+
+-- Remove old audit logs
+DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '90 days';
+```
+
+### Log Rotation
+
+```bash
+# Configure logrotate
+/var/log/secure-ai/*.log {
+  daily
+  rotate 14
+  compress
+  delaycompress
+  notifempty
+  create 0640 secure-ai secure-ai
+  sharedscripts
+}
+```
